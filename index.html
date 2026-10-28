@@ -1,0 +1,1173 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="referrer" content="no-referrer">
+<link rel="icon" href="data:,">
+<title>骑行路线设计器 · 环法坡度分级</title>
+<link rel="stylesheet" href="leaflet/leaflet.css">
+<style>
+  :root{
+    --accent:#f4511e; --bg:#f7f7f8; --card:#ffffff; --line:#e4e4e8;
+    --txt:#1d2129; --txt2:#7a7f8a;
+  }
+  *{box-sizing:border-box}
+  html,body{height:100%;margin:0}
+  body{font-family:"Segoe UI","Microsoft YaHei",system-ui,sans-serif;color:var(--txt);background:var(--bg)}
+  #app{display:flex;height:100%}
+
+  /* ---------- 侧栏 ---------- */
+  #sidebar{width:400px;min-width:400px;background:var(--bg);border-right:1px solid var(--line);
+           display:flex;flex-direction:column;overflow-y:auto;padding:14px;gap:12px;z-index:1000}
+  #sidebar h1{font-size:17px;margin:0;display:flex;align-items:center;gap:8px}
+  #sidebar h1 .dot{width:10px;height:10px;border-radius:50%;background:var(--accent);flex:none}
+  .sub{font-size:12px;color:var(--txt2);margin:4px 0 0}
+  #status{font-size:12px;color:var(--accent);min-height:16px;line-height:1.5}
+  #netinfo{font-size:11.5px;color:var(--txt2);min-height:15px;line-height:1.5}
+
+  .controls{display:flex;gap:8px;flex-wrap:wrap}
+  .controls2{display:flex;gap:8px;flex-wrap:wrap;align-items:center}
+  select{flex:1;min-width:110px;padding:7px 8px;border:1px solid var(--line);border-radius:8px;background:#fff;font-size:13px;color:var(--txt)}
+  input[type=text]{flex:1;min-width:110px;padding:7px 8px;border:1px solid var(--line);border-radius:8px;font-size:12px;color:var(--txt)}
+  button{padding:7px 12px;border:1px solid var(--line);border-radius:8px;background:#fff;font-size:13px;cursor:pointer;color:var(--txt)}
+  button:hover{background:#f0f0f2}
+  button.danger{color:#c62828}
+  button.primary{background:var(--accent);border-color:var(--accent);color:#fff}
+  button.primary:hover{background:#e64a19}
+
+  .stats{display:grid;grid-template-columns:repeat(4,1fr);gap:8px}
+  .stat{background:var(--card);border:1px solid var(--line);border-radius:10px;padding:8px 6px;text-align:center}
+  .stat b{display:block;font-size:15px}
+  .stat span{font-size:11px;color:var(--txt2)}
+
+  .card{background:var(--card);border:1px solid var(--line);border-radius:12px;padding:10px}
+  .card h3{margin:0 0 8px;font-size:13px;color:var(--txt2);font-weight:600}
+  #chartWrap{position:relative}
+  #chart{display:block;width:100%;cursor:crosshair}
+  #chartTip{position:absolute;display:none;pointer-events:none;background:rgba(20,24,32,.92);color:#fff;
+            font-size:11px;line-height:1.5;padding:6px 9px;border-radius:6px;white-space:nowrap;z-index:600}
+
+  .legend{display:flex;flex-wrap:wrap;gap:6px 10px;font-size:11px;color:var(--txt2);margin-top:8px}
+  .legend i{display:inline-block;width:10px;height:10px;border-radius:2px;margin-right:4px;vertical-align:-1px}
+  details.rules{margin-top:8px;font-size:12px;color:var(--txt2)}
+  details.rules summary{cursor:pointer;color:var(--txt);font-size:12px}
+  details.rules table{border-collapse:collapse;margin-top:6px;width:100%}
+  details.rules td{border:1px solid var(--line);padding:3px 6px;font-size:11.5px}
+  details.rules td:first-child{white-space:nowrap;font-weight:700}
+
+  .climb-item{display:flex;gap:10px;align-items:flex-start;background:var(--card);border:1px solid var(--line);
+              border-left:4px solid #999;border-radius:10px;padding:8px 10px;margin-bottom:8px;cursor:pointer}
+  .climb-item:hover{box-shadow:0 2px 8px rgba(0,0,0,.08)}
+  .climb-item .t{font-size:13px;font-weight:700}
+  .climb-item .m{font-size:11.5px;color:var(--txt2);margin-top:2px;line-height:1.5}
+  .empty{font-size:12.5px;color:var(--txt2);padding:4px 2px}
+
+  ol#wplist{list-style:none;margin:0;padding:0;font-size:12px}
+  #wplist li{display:flex;align-items:center;gap:8px;padding:5px 6px;border-radius:8px}
+  #wplist li:hover{background:#efefef}
+  #wplist .n{width:20px;height:20px;border-radius:50%;background:#fff;border:2px solid var(--accent);
+             color:var(--accent);font-size:11px;font-weight:700;display:flex;align-items:center;justify-content:center;flex:none}
+  #wplist .c{color:var(--txt2);font-family:Consolas,monospace;font-size:11px;flex:1}
+  #wplist .del{border:none;background:none;color:#c62828;font-size:15px;padding:0 6px;cursor:pointer}
+
+  .hint{font-size:12px;color:var(--txt2);line-height:1.6;padding-bottom:8px}
+
+  /* ---------- 地图元素 ---------- */
+  #mapWrap{flex:1;position:relative;display:flex}
+  #map{flex:1;height:100%}
+  #searchBox{position:absolute;top:10px;left:50%;transform:translateX(-50%);z-index:1100;width:380px;max-width:70%}
+  #searchInput{width:100%;padding:8px 14px;border:none;border-radius:10px;background:#fff;
+               box-shadow:0 2px 10px rgba(0,0,0,.25);font-size:13px;outline:none;color:var(--txt)}
+  #searchInput::placeholder{color:#a0a4ad}
+  #searchResults{display:none;position:absolute;top:42px;left:0;right:0;background:#fff;border-radius:10px;
+                 box-shadow:0 6px 18px rgba(0,0,0,.28);max-height:340px;overflow-y:auto;padding:4px 0}
+  .sr{padding:8px 14px;font-size:12.5px;cursor:pointer;line-height:1.5;border-bottom:1px solid #f4f4f6}
+  .sr:last-child{border-bottom:none}
+  .sr:hover{background:#f5f5f7}
+  .sr b{color:var(--txt)}
+  .sr .d{color:var(--txt2);font-size:11px;display:block}
+  .sr.info{color:var(--txt2);cursor:default}
+  .climb-badge{width:26px;height:26px;border-radius:50%;color:#fff;font-weight:800;font-size:13px;
+               display:flex;align-items:center;justify-content:center;border:2px solid #fff;
+               box-shadow:0 1px 5px rgba(0,0,0,.45);text-shadow:0 1px 1px rgba(0,0,0,.35)}
+  .climb-badge.hc{font-size:10px}
+  .climb-badge.minor{width:14px;height:14px;background:#9e9e9e;box-shadow:0 0 3px rgba(0,0,0,.4)}
+  .wp-icon{width:24px;height:24px;border-radius:50%;background:#fff;border:3px solid var(--accent);
+           color:var(--accent);font-weight:800;font-size:12px;display:flex;align-items:center;justify-content:center;
+           box-shadow:0 1px 4px rgba(0,0,0,.35)}
+  .leaflet-container{font:inherit}
+
+  #sbToggle{display:none;position:fixed;top:10px;left:10px;z-index:1200;background:#fff;box-shadow:0 2px 6px rgba(0,0,0,.25)}
+  #toasts{position:fixed;left:50%;bottom:26px;transform:translateX(-50%);z-index:3000;display:flex;flex-direction:column;gap:8px}
+  .toast{background:rgba(20,24,32,.92);color:#fff;padding:9px 16px;border-radius:8px;font-size:13px;max-width:80vw}
+
+  @media (max-width:760px){
+    #sidebar{position:fixed;top:0;left:0;bottom:0;transform:translateX(-102%);transition:transform .25s;box-shadow:4px 0 16px rgba(0,0,0,.2)}
+    #sidebar.open{transform:none}
+    #sbToggle{display:block}
+  }
+</style>
+</head>
+<body>
+<button id="sbToggle">☰ 面板</button>
+<div id="app">
+  <aside id="sidebar">
+    <div>
+      <h1><span class="dot"></span>骑行路线设计器</h1>
+      <p class="sub">实时高程分析 · 环法标准坡度分级 · GPX 导出</p>
+    </div>
+    <div>
+      <div id="status"></div>
+      <div id="netinfo"></div>
+    </div>
+
+    <div class="controls">
+      <select id="profile" title="骑行风格(BRouter 引擎的路网偏好)">
+        <option value="trekking">🚴 休闲骑行（Trekking）</option>
+        <option value="racingbike">🏁 公路竞速（Racing）</option>
+        <option value="fastbike">⚡ 快速通勤（Fast）</option>
+        <option value="shortest">📏 最短路线</option>
+      </select>
+    </div>
+    <div class="controls2">
+      <select id="engine" title="路线计算引擎；自动 = BRouter 可用则优先，其次高德，否则直线手绘">
+        <option value="auto">引擎：自动选择</option>
+        <option value="brouter">BRouter（OSM 路网）</option>
+        <option value="amap">高德骑行（需 Key）</option>
+        <option value="straight">直线手绘</option>
+      </select>
+      <input type="text" id="amapKey" placeholder="高德 Web服务 Key（免费申请，选填）">
+      <input type="text" id="tdtKey" placeholder="天地图 Key（选填，启用天地图图层）">
+    </div>
+    <div class="controls">
+      <button id="btnUndo" title="删除最后一个途经点">撤销</button>
+      <button id="btnClear" class="danger">清空</button>
+      <button id="btnGpx" class="primary">导出 GPX</button>
+    </div>
+
+    <div class="stats">
+      <div class="stat"><b id="stDist">–</b><span>总距离 km</span></div>
+      <div class="stat"><b id="stAsc">–</b><span>累计爬升 m</span></div>
+      <div class="stat"><b id="stDesc">–</b><span>累计下降 m</span></div>
+      <div class="stat"><b id="stTime">–</b><span>预计用时</span></div>
+    </div>
+
+    <div class="card">
+      <h3>高程剖面（按坡度着色，悬停查看）</h3>
+      <div id="chartWrap">
+        <canvas id="chart" height="190"></canvas>
+        <div id="chartTip"></div>
+      </div>
+      <div class="legend" id="legendGrade"></div>
+      <details class="rules">
+        <summary>环法爬坡分级规则（估算）</summary>
+        <table>
+          <tr><td style="color:#2e7d32">4 级</td><td>爬升约 60–150 m 的短坡</td></tr>
+          <tr><td style="color:#f9a825">3 级</td><td>爬升 150–350 m</td></tr>
+          <tr><td style="color:#ef6c00">2 级</td><td>爬升 350–650 m</td></tr>
+          <tr><td style="color:#d32f2f">1 级</td><td>爬升 650–1000 m</td></tr>
+          <tr><td style="color:#6a1b9a">HC</td><td>爬升 &gt;1000 m 的超级坡</td></tr>
+        </table>
+        <p>环法官方分级由赛事总裁判综合坡度×长度×海拔判定，无公开公式。本站按通行估算：以爬升量为基础，
+           平均坡度 ≥8–9% 或最大坡度 ≥13% 时升一级。灰点为未分级小坡。</p>
+      </details>
+    </div>
+
+    <div class="card">
+      <h3>爬坡段（点击定位到地图）</h3>
+      <div id="climbList"><div class="empty">暂无数据</div></div>
+      <div class="legend" id="legendCat"></div>
+    </div>
+
+    <div class="card">
+      <h3>途经点</h3>
+      <ol id="wplist"></ol>
+    </div>
+
+    <p class="hint">🖱 在地图上<b>单击</b>追加途经点，双击缩放；<b>拖动</b>编号圆点可调整路线。
+       高德 Key 在 <a href="https://console.amap.com/dev/key/app" target="_blank">高德开放平台</a>
+       免费申请（类型选「Web服务」），粘贴到上方输入框即可自动启用国内骑行路网。
+       直线模式下途经点间为直线，仍会分析高程与坡度。</p>
+  </aside>
+  <div id="mapWrap">
+    <div id="searchBox">
+      <input id="searchInput" type="text" placeholder="🔍 搜索地点，点击结果自动添加为途经点" autocomplete="off">
+      <div id="searchResults"></div>
+    </div>
+    <div id="map"></div>
+  </div>
+</div>
+<div id="toasts"></div>
+
+<script src="leaflet/leaflet.js"></script>
+<script>
+'use strict';
+/* ================= 基础 ================= */
+const $ = s => document.querySelector(s);
+const profileSel = $('#profile'), engineSel = $('#engine'), keyInput = $('#amapKey');
+
+const map = L.map('map', { zoomControl: true });
+function tl(url, maxZoom, opt = {}){
+  return L.tileLayer(url, Object.assign({ maxZoom, attribution: '© OpenStreetMap 贡献者' }, opt));
+}
+/* GCJ-02 底图清单(其余均为 WGS84/CGCS2000) */
+const LAYER_DATUM = {'高德地图': 'gcj', '高德卫星': 'gcj', '腾讯地图': 'gcj'};
+const tdtKeyInput = $('#tdtKey');
+let bases = {}, overlays = {}, layerCtrl = null, currentBaseName = 'OSM 标准';
+
+function buildLayerSets(){
+  const tdt = tdtKeyInput.value.trim();
+  bases = {
+    'OSM 标准':        tl('https://tile.openstreetmap.org/{z}/{x}/{y}.png', 19),
+    'CyclOSM 骑行图':  tl('https://{s}.tile-cyclosm.openstreetmap.fr/cyclosm/{z}/{x}/{y}.png', 19,
+                          {subdomains:'abc', attribution:'© CyclOSM | © OpenStreetMap 贡献者'}),
+    'OpenTopoMap 地形': tl('https://{s}.tile.opentopomap.org/{z}/{x}/{y}.png', 17,
+                          {subdomains:'abc', attribution:'© OpenTopoMap (CC-BY-SA) | © OpenStreetMap 贡献者'}),
+    'Esri 卫星影像':    tl('https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}', 19,
+                          {attribution:'© Esri, Maxar, Earthstar Geographics'}),
+    '高德地图':         tl('https://webrd0{s}.is.autonavi.com/appmaptile?lang=zh_cn&size=1&scale=1&style=7&x={x}&y={y}&z={z}', 19,
+                          {subdomains:'1234', attribution:'© 高德地图'}),
+    '高德卫星':         L.layerGroup([
+                          tl('https://webst0{s}.is.autonavi.com/appmaptile?style=6&x={x}&y={y}&z={z}', 19, {subdomains:'1234', attribution:'© 高德地图'}),
+                          tl('https://webst0{s}.is.autonavi.com/appmaptile?style=8&x={x}&y={y}&z={z}', 19, {subdomains:'1234'})
+                        ]),
+    '腾讯地图':         tl('https://rt{s}.map.gtimg.com/realtimerender?z={z}&x={x}&y={-y}&type=vector&style=0', 18,
+                          {subdomains:'0123', attribution:'© 腾讯地图'})
+  };
+  if (tdt){
+    bases['天地图 矢量'] = tl('https://t{s}.tianditu.gov.cn/DataServer?T=vec_w&x={x}&y={y}&l={z}&tk=' + tdt, 18,
+                            {subdomains:'01234567', attribution:'© 天地图'});
+    bases['天地图 影像'] = L.layerGroup([
+                            tl('https://t{s}.tianditu.gov.cn/DataServer?T=img_w&x={x}&y={y}&l={z}&tk=' + tdt, 18,
+                              {subdomains:'01234567', attribution:'© 天地图'}),
+                            tl('https://t{s}.tianditu.gov.cn/DataServer?T=cia_w&x={x}&y={y}&l={z}&tk=' + tdt, 18,
+                              {subdomains:'01234567'})
+                          ]);
+  }
+  overlays = {
+    '骑线路网叠加': tl('https://tile.waymarkedtrails.org/cycling/{z}/{x}/{y}.png', 18,
+                     {opacity:0.9, attribution:'© Waymarked Trails | © OpenStreetMap 贡献者'}),
+    '徒步路网叠加': tl('https://tile.waymarkedtrails.org/hiking/{z}/{x}/{y}.png', 18, {opacity:0.9})
+  };
+}
+function rebuildLayerControl(){
+  if (layerCtrl) map.removeControl(layerCtrl);
+  layerCtrl = L.control.layers(bases, overlays, {position:'topright'}).addTo(map);
+}
+buildLayerSets();
+bases[currentBaseName].addTo(map);
+let tileErrCount = 0;
+map.on('tileerror', () => {
+  tileErrCount++;
+  if (tileErrCount === 6)
+    setNetInfo(netBaseText + (netBaseText ? '｜' : '') + '⚠ 当前底图瓦片加载异常，可在右上角图层控制中切换底图');
+});
+L.control.layers(bases, null, {position:'topright'}).addTo(map);
+L.control.scale({imperial:false}).addTo(map);
+
+const routeLayer  = L.layerGroup().addTo(map);   // 路线 + 坡度图标
+const wpLayer     = L.layerGroup().addTo(map);   // 途经点
+const hoverMarker = L.circleMarker([0,0],{radius:6,color:'#111',weight:2,fillColor:'#fff',fillOpacity:1}).addTo(map);
+hoverMarker.setStyle({opacity:0, fillOpacity:0});
+
+/* ================= 状态 ================= */
+const KEY = 'cycleroute.v2';
+let wps = [];        // [{lat,lng}] 一律 WGS84
+let route = null;
+let seq = 0;         // 请求序号，丢弃过期响应
+let lastFitLen = -1;
+let baseDatum = 'wgs';            // 当前底图坐标系：wgs / gcj
+const netProbe = { brouter: null }; // null=检测中
+
+const gradeBuckets = [
+  {max:-2,  c:'#3d6fb4', n:'下坡 < -2%'},
+  {max:0,   c:'#8ab4d8', n:'缓下坡 -2~0%'},
+  {max:1.5, c:'#43a047', n:'平路 0~1.5%'},
+  {max:3,   c:'#fdd835', n:'1.5~3%'},
+  {max:5,   c:'#fb8c00', n:'3~5%'},
+  {max:7,   c:'#e53935', n:'5~7%'},
+  {max:9,   c:'#b71c1c', n:'7~9%'},
+  {max:1e9, c:'#8e24aa', n:'≥9%'}
+];
+function bucket(g){ for(const b of gradeBuckets) if(g < b.max) return b; return gradeBuckets[7]; }
+
+const CATC = {HC:'#6a1b9a','1':'#d32f2f','2':'#ef6c00','3':'#f9a825','4':'#2e7d32',null:'#9e9e9e'};
+const CATN = {HC:'HC 级超级坡','1':'1 级坡','2':'2 级坡','3':'3 级坡','4':'4 级坡',null:'未分级坡'};
+
+/* ================= GCJ-02 ⇄ WGS84（标准偏移算法） ================= */
+function outOfChina(lat, lng){ return lng < 72.004 || lng > 137.8347 || lat < 0.8293 || lat > 55.8271; }
+/* 标准偏移算法（eviltransform） */
+function transformLat(x, y){
+  let ret = -100.0 + 2.0*x + 3.0*y + 0.2*y*y + 0.1*x*y + 0.2*Math.sqrt(Math.abs(x));
+  ret += (20.0*Math.sin(6.0*x*Math.PI) + 20.0*Math.sin(2.0*x*Math.PI)) * 2.0/3.0;
+  ret += (20.0*Math.sin(y*Math.PI) + 40.0*Math.sin(y/3.0*Math.PI)) * 2.0/3.0;
+  ret += (160.0*Math.sin(y/12.0*Math.PI) + 320*Math.sin(y*Math.PI/30.0)) * 2.0/3.0;
+  return ret;
+}
+function transformLng(x, y){
+  let ret = 300.0 + x + 2.0*y + 0.1*x*x + 0.1*x*y + 0.1*Math.sqrt(Math.abs(x));
+  ret += (20.0*Math.sin(6.0*x*Math.PI) + 20.0*Math.sin(2.0*x*Math.PI)) * 2.0/3.0;
+  ret += (20.0*Math.sin(x*Math.PI) + 40.0*Math.sin(x/3.0*Math.PI)) * 2.0/3.0;
+  ret += (150.0*Math.sin(x/12.0*Math.PI) + 300.0*Math.sin(x/30.0*Math.PI)) * 2.0/3.0;
+  return ret;
+}
+function wgs2gcj(lat, lng){
+  if (outOfChina(lat, lng)) return [lat, lng];
+  const a = 6378245.0, ee = 0.00669342162296594323;
+  let dLat = transformLat(lng - 105.0, lat - 35.0);
+  let dLng = transformLng(lng - 105.0, lat - 35.0);
+  const radLat = lat / 180.0 * Math.PI;
+  let magic = Math.sin(radLat);
+  magic = 1 - ee * magic * magic;
+  const sqrtMagic = Math.sqrt(magic);
+  dLat = (dLat * 180.0) / ((a * (1 - ee)) / (magic * sqrtMagic) * Math.PI);
+  dLng = (dLng * 180.0) / (a / sqrtMagic * Math.cos(radLat) * Math.PI);
+  return [lat + dLat, lng + dLng];
+}
+function gcj2wgs(lat, lng){
+  if (outOfChina(lat, lng)) return [lat, lng];
+  let wLat = lat, wLng = lng;
+  for (let i = 0; i < 3; i++){
+    const g = wgs2gcj(wLat, wLng);
+    wLat -= g[0] - lat;
+    wLng -= g[1] - lng;
+  }
+  return [wLat, wLng];
+}
+/* 显示坐标：WGS → 当前底图坐标系 */
+function toDisp(lat, lng){ return baseDatum === 'gcj' ? wgs2gcj(lat, lng) : [lat, lng]; }
+
+/* ================= 环法分级（估算） ================= */
+function categorize(gain, avg, max){
+  const L4 = ['4','3','2','1','HC'];
+  let lv;
+  if (gain >= 1000) return 'HC';
+  if (gain >= 650)      lv = avg >= 8  ? 4 : 3;
+  else if (gain >= 350) lv = avg >= 9  ? 3 : 2;
+  else if (gain >= 150) lv = avg >= 9  ? 2 : 1;
+  else if (gain >= 60)  lv = avg >= 9  ? 1 : 0;
+  else                  lv = avg >= 4.5 ? 0 : -1;
+  if (lv < 0) return null;
+  if (lv < 4 && (avg >= 9.5 || max >= 13)) lv++;
+  return L4[lv];
+}
+
+/* ================= 工具 ================= */
+function setStatus(t){ $('#status').textContent = t; }
+function setNetInfo(t){ $('#netinfo').textContent = t; }
+function toast(msg){
+  const d = document.createElement('div');
+  d.className = 'toast'; d.textContent = msg;
+  $('#toasts').appendChild(d);
+  setTimeout(() => d.remove(), 7000);
+}
+function fetchT(url, ms = 20000){
+  const c = new AbortController();
+  const t = setTimeout(() => c.abort(), ms);
+  return fetch(url, {signal: c.signal}).finally(() => clearTimeout(t));
+}
+const sleep = ms => new Promise(r => setTimeout(r, ms));
+function haversine(a, b){
+  const R = 6371000, rad = Math.PI/180;
+  const dLat = (b.lat-a.lat)*rad, dLon = (b.lng-a.lng)*rad;
+  const s = Math.sin(dLat/2)**2 + Math.cos(a.lat*rad)*Math.cos(b.lat*rad)*Math.sin(dLon/2)**2;
+  return 2*R*Math.asin(Math.sqrt(s));
+}
+
+/* ================= 路线引擎 ================= */
+function resolveEngine(){
+  const sel = engineSel.value;
+  if (sel !== 'auto') return sel;
+  if (netProbe.brouter === true) return 'brouter';
+  if (netProbe.brouter === false && keyInput.value.trim()) return 'amap';
+  if (netProbe.brouter === false) return 'straight';
+  return 'straight'; // 检测中先按直线,检测完成后自动重算
+}
+const ENGINE_NAME = {brouter:'BRouter (OSM)', amap:'高德骑行', straight:'直线手绘'};
+
+async function routeBRouter(){
+  const lonlats = wps.map(w => w.lng.toFixed(6) + ',' + w.lat.toFixed(6)).join('|');
+  const hosts = ['/proxy/brouter', 'https://brouter.de/brouter'];
+  let lastErr = null;
+  for (const host of hosts){
+    try{
+      const res = await fetchT(`${host}?lonlats=${lonlats}&profile=${profileSel.value}&alternativeidx=0&format=geojson`, 30000);
+      if (!res.ok) throw new Error('HTTP ' + res.status);
+      const gj = await res.json();
+      const f = gj.features && gj.features[0];
+      if (!f || !f.geometry || f.geometry.coordinates.length < 2)
+        throw new Error('未找到可行路线（两点间可能没有可骑行的道路连接）');
+      const pts = f.geometry.coordinates.map(c => ({lng:c[0], lat:c[1], ele:c[2] != null ? c[2] : null}));
+      return { pts, meta: { time: parseFloat(f.properties && f.properties['total-time']),
+                            asc:  parseFloat(f.properties && f.properties['filtered ascend']) } };
+    }catch(err){ lastErr = err; }
+  }
+  throw lastErr || new Error('BRouter 不可用');
+}
+
+async function routeAmap(){
+  const key = keyInput.value.trim();
+  if (!key) throw new Error('高德路线引擎需要在左侧输入高德 Web服务 Key（免费申请）');
+  const pts = []; let time = 0;
+  for (let i = 0; i < wps.length - 1; i++){
+    const o = wgs2gcj(wps[i].lat, wps[i].lng), d = wgs2gcj(wps[i+1].lat, wps[i+1].lng);
+    const url = `https://restapi.amap.com/v4/direction/bicycling?origin=${o[1].toFixed(6)},${o[0].toFixed(6)}&destination=${d[1].toFixed(6)},${d[0].toFixed(6)}&key=${encodeURIComponent(key)}`;
+    let r;
+    try{
+      const res = await fetchT(url, 15000);
+      r = await res.json();
+    }catch(err){ throw new Error('高德 API 请求失败：' + err.message); }
+    if (r.errcode !== 0)
+      throw new Error('高德 API 错误 ' + r.errcode + '：' + r.errmsg +
+        (r.errcode === 10001 ? '（Key 无效，请确认是「Web服务」类型）' : ''));
+    const path = r.data && r.data.paths && r.data.paths[0];
+    if (!path) throw new Error('高德未返回可行骑行路线');
+    time += parseFloat(path.duration) || 0;
+    for (const step of path.steps){
+      for (const pr of step.polyline.split(';')){
+        const seg = pr.split(',').map(Number);
+        if (seg.length < 2 || isNaN(seg[0])) continue;
+        const w = gcj2wgs(seg[1], seg[0]);   // 高德返回 lng,lat → 转 WGS
+        const last = pts[pts.length - 1];
+        if (last && Math.abs(last.lat - w[0]) < 1e-9 && Math.abs(last.lng - w[1]) < 1e-9) continue;
+        pts.push({lat: w[0], lng: w[1], ele: null});
+      }
+    }
+  }
+  if (pts.length < 2) throw new Error('高德未返回有效路线');
+  return { pts, meta: { time } };
+}
+
+function routeStraight(){
+  const pts = [];
+  for (let i = 0; i < wps.length - 1; i++){
+    const a = wps[i], b = wps[i+1];
+    const len = haversine(a, b);
+    const n = Math.max(1, Math.round(len / 50));
+    for (let k = 0; k < n; k++){
+      const t = k / n;
+      pts.push({lat: a.lat + (b.lat - a.lat) * t, lng: a.lng + (b.lng - a.lng) * t, ele: null});
+    }
+  }
+  pts.push({lat: wps[wps.length-1].lat, lng: wps[wps.length-1].lng, ele: null});
+  return { pts, meta: {} };
+}
+
+/* ================= 高程获取（OpenTopoData / Open-Elevation） ================= */
+const ELEV_COMBOS = [
+  {u: q => `/proxy/opentopodata/srtm30m?locations=${q}`, n:'SRTM 30m'},
+  {u: q => `/proxy/opentopodata/etopo1?locations=${q}`,  n:'ETOPO 1min'},
+  {u: q => `https://api.opentopodata.org/v1/srtm30m?locations=${q}`, n:'SRTM 30m'},
+  {u: q => `https://api.open-elevation.com/api/v1/lookup?locations=${q}`, n:'SRTM'}
+];
+let elevCombo = null;
+async function elevQuery(locs){
+  const q = locs.map(p => p.lat.toFixed(5) + ',' + p.lng.toFixed(5)).join('|');
+  const list = elevCombo ? [elevCombo] : ELEV_COMBOS;
+  let lastErr = null;
+  for (const c of list){
+    try{
+      const res = await fetchT(c.u(q), 45000);
+      if (!res.ok) throw new Error('HTTP ' + res.status);
+      const j = await res.json();
+      const rs = j.results || j;
+      if (!Array.isArray(rs) || rs.length !== locs.length) throw new Error('响应格式异常');
+      elevCombo = c;
+      return rs.map(r => (r.elevation != null ? r.elevation : r.ele));
+    }catch(err){ lastErr = err; }
+  }
+  throw lastErr || new Error('高程服务不可用');
+}
+
+async function fillElevations(pts, onProg){
+  let d = 0; pts[0].dist = 0;
+  for (let i = 1; i < pts.length; i++){ d += haversine(pts[i-1], pts[i]); pts[i].dist = d; }
+  const total = d;
+  if (total < 40){ pts.forEach(p => p.ele = 0); return; }
+  const spacing = Math.max(80, total / 400);
+  const idxs = []; let next = 0;
+  pts.forEach((p, i) => { if (p.dist >= next){ idxs.push(i); next = p.dist + spacing; } });
+  if (idxs[idxs.length - 1] !== pts.length - 1) idxs.push(pts.length - 1);
+  const batches = [];
+  for (let i = 0; i < idxs.length; i += 100) batches.push(idxs.slice(i, i + 100));
+  for (let b = 0; b < batches.length; b++){
+    onProg(b + 1, batches.length);
+    const locs = batches[b].map(i => pts[i]);
+    const eles = await elevQuery(locs);
+    batches[b].forEach((pi, k) => pts[pi].ele = eles[k]);
+    if (b < batches.length - 1) await sleep(1100);   // 免费接口限速 1 次/秒
+  }
+  // 全局按相邻采样点线性插值，补齐未采样的点
+  for (let k = 0; k < idxs.length - 1; k++){
+    const a = idxs[k], b2 = idxs[k+1];
+    if (b2 <= a + 1) continue;
+    const e0 = pts[a].ele, e1 = pts[b2].ele;
+    if (e0 == null || e1 == null) continue;
+    for (let i = a + 1; i < b2; i++){
+      const t = (pts[i].dist - pts[a].dist) / (pts[b2].dist - pts[a].dist);
+      pts[i].ele = e0 + (e1 - e0) * t;
+    }
+  }
+}
+
+/* ================= 路线分析 ================= */
+function buildRouteFromPts(pts, meta){
+  let d = 0; pts[0].dist = 0;
+  for (let i = 1; i < pts.length; i++){ d += haversine(pts[i-1], pts[i]); pts[i].dist = d; }
+  const hasEle = pts.every(p => p.ele != null);
+  let asc = null, desc = null, climbs = [], time = null;
+  const lenKm = d / 1000;
+  if (meta.time != null && !isNaN(meta.time)) time = meta.time;
+  else time = lenKm/18*3600 + ((meta.estAsc || 0)/500)*3600;
+  if (hasEle){
+    smoothEle(pts, 75);
+    for (let i = 0; i < pts.length; i++){
+      let j = i;
+      while (j > 0 && pts[i].dist - pts[j-1].dist <= 100) j--;
+      pts[i].grade = (i === j) ? 0 : (pts[i].sele - pts[j].sele) / (pts[i].dist - pts[j].dist) * 100;
+    }
+    let a = 0, ds = 0;
+    for (let i = 1; i < pts.length; i++){
+      const dd = pts[i].ele - pts[i-1].ele;
+      if (dd > 0) a += dd; else ds -= dd;
+    }
+    asc  = (meta.asc != null && !isNaN(meta.asc)) ? meta.asc : a;
+    desc = ds;
+    climbs = detectClimbs(pts);
+  }
+  return { pts, climbs, lenKm, asc, desc, time, hasEle, engine: meta.engine || '' };
+}
+
+/* 距离窗口滑动平均，压制高程噪声 */
+function smoothEle(pts, w){
+  let j0 = 0, j1 = 0;
+  for (let i = 0; i < pts.length; i++){
+    while (pts[i].dist - pts[j0].dist > w) j0++;
+    while (j1 < pts.length - 1 && pts[j1].dist - pts[i].dist < w) j1++;
+    let s = 0, n = 0;
+    for (let k = j0; k <= j1; k++){ s += pts[k].ele; n++; }
+    pts[i].sele = s / n;
+  }
+}
+
+/* 爬坡段识别：坡度≥1.5% 视为上坡，间隔<250m 合并 */
+function detectClimbs(pts){
+  const UP = 1.5, GAP = 250, MINLEN = 80;
+  const runs = []; let s = -1;
+  for (let i = 0; i < pts.length; i++){
+    const up = pts[i].grade >= UP;
+    if (up && s < 0) s = i;
+    if (!up && s >= 0){
+      if (pts[i].dist - pts[s].dist >= MINLEN) runs.push([s, i]);
+      s = -1;
+    }
+  }
+  if (s >= 0 && pts[pts.length-1].dist - pts[s].dist >= MINLEN) runs.push([s, pts.length-1]);
+  const mg = [];
+  for (const r of runs){
+    if (mg.length && pts[r[0]].dist - pts[mg[mg.length-1][1]].dist < GAP) mg[mg.length-1][1] = r[1];
+    else mg.push(r.slice());
+  }
+  const climbs = [];
+  for (const [a, b] of mg){
+    let gain = 0;
+    for (let i = a+1; i <= b; i++){ const dd = pts[i].sele - pts[i-1].sele; if (dd > 0) gain += dd; }
+    const len = pts[b].dist - pts[a].dist;
+    const avg = gain / len * 100;
+    let max = 0;
+    for (let i = a; i < b; i++) max = Math.max(max, pts[i].grade);
+    if ((gain >= 15 && avg >= 2) || (gain >= 30 && avg >= 1.5))
+      climbs.push({a, b, startKm: pts[a].dist/1000, endKm: pts[b].dist/1000,
+                   len, gain, avg, max, cap: categorize(gain, avg, max)});
+  }
+  return climbs;
+}
+
+/* ================= 主流程 ================= */
+function scheduleRoute(){ clearTimeout(scheduleRoute._t); scheduleRoute._t = setTimeout(computeRoute, 160); }
+
+async function computeRoute(){
+  const my = ++seq;
+  if (wps.length < 2){ route = null; draw(); return; }
+  const eng = resolveEngine();
+  // 自动模式下允许降级链：BRouter → 高德(有Key) → 直线
+  const order = engineSel.value === 'auto'
+    ? (eng === 'brouter' ? ['brouter', 'amap', 'straight'] : [eng])
+    : [eng];
+  let lastErr = null;
+  for (const e of order){
+    try{
+      if (my !== seq) return;
+      setStatus('⏳ 正在计算路线…（' + ENGINE_NAME[e] + '）');
+      let pts, meta;
+      if (e === 'brouter')           ({pts, meta} = await routeBRouter());
+      else if (e === 'amap')         ({pts, meta} = await routeAmap());
+      else                           ({pts, meta} = routeStraight());
+      if (my !== seq) return;
+      meta.engine = e;
+      if (pts.some(p => p.ele == null)){
+        try{
+          await fillElevations(pts, (b, n) => {
+            if (my === seq) setStatus(`⏳ 获取高程数据 ${b}/${n}…（国际高程服务较慢，请稍候）`);
+          });
+          if (my !== seq) return;
+        }catch(err){
+          if (my !== seq) return;
+          toast('高程获取失败（' + err.message + '），本次仅显示距离，不分析坡度');
+        }
+      }
+      route = buildRouteFromPts(pts, meta);
+      draw();
+      setStatus('');
+      return;
+    }catch(err){
+      lastErr = err;
+      if (my !== seq) return;
+      if (e === 'brouter'){ netProbe.brouter = false; updateNetInfo(); }
+    }
+  }
+  route = null; draw(); setStatus('');
+  toast('路线计算失败：' + (lastErr && lastErr.message));
+}
+
+/* ================= 绘制 ================= */
+function draw(){
+  routeLayer.clearLayers();
+  renderStats(); renderChart(); renderClimbList(); renderWpList();
+  if (!route){ lastFitLen = -1; return; }
+  const pts = route.pts;
+  const ll = pts.map(p => { const q = toDisp(p.lat, p.lng); return [q[0], q[1]]; });
+  L.polyline(ll, {color:'#ffffff', weight:8, opacity:0.9}).addTo(routeLayer);
+  // 按坡度分色
+  let cur = null, arr = [];
+  const flush = () => { if (arr.length > 1)
+    L.polyline(arr.map(q => [q[0], q[1]]), {color:cur, weight:5, opacity:0.95}).addTo(routeLayer); };
+  for (let i = 0; i < pts.length - 1; i++){
+    const c = route.hasEle ? bucket(pts[i].grade).c : '#5b6b7a';
+    const d = ll[i];
+    if (cur === null){ cur = c; arr = [d]; }
+    else if (c !== cur){ arr.push(d); flush(); cur = c; arr = [d]; }
+    else arr.push(d);
+  }
+  arr.push(ll[ll.length - 1]); flush();
+  // 爬坡段高亮 + 分类图标
+  if (route.hasEle) for (const c of route.climbs){
+    const col = CATC[c.cap];
+    if (c.cap)
+      L.polyline(ll.slice(c.a, c.b+1), {color:col, weight:11, opacity:0.28}).addTo(routeLayer);
+    const q = toDisp(pts[c.a].lat, pts[c.a].lng);
+    const html = c.cap
+      ? `<div class="climb-badge${c.cap==='HC'?' hc':''}" style="background:${col}">${c.cap}</div>`
+      : `<div class="climb-badge minor"></div>`;
+    L.marker(q, {
+      icon: L.divIcon({className:'', html, iconSize:[26,26], iconAnchor:[13,13]}),
+      zIndexOffset: 800
+    }).addTo(routeLayer).bindTooltip(climbTip(c), {direction:'top', offset:[0,-8]});
+  }
+  if (lastFitLen !== wps.length){
+    map.fitBounds(L.latLngBounds(ll), {padding:[60, 60]});
+    lastFitLen = wps.length;
+  }
+}
+
+function climbTip(c){
+  return `<b>${CATN[c.cap]}</b><br>` +
+         `K ${c.startKm.toFixed(1)} – ${c.endKm.toFixed(1)} · ${(c.len/1000).toFixed(2)} km<br>` +
+         `均陡 ${c.avg.toFixed(1)}% · 最大 ${c.max.toFixed(1)}% · 爬升 ${Math.round(c.gain)} m`;
+}
+
+function renderStats(){
+  $('#stDist').textContent = route ? route.lenKm.toFixed(route.lenKm >= 100 ? 1 : 2) : '–';
+  $('#stAsc').textContent  = route && route.asc  != null ? Math.round(route.asc)  : '–';
+  $('#stDesc').textContent = route && route.desc != null ? Math.round(route.desc) : '–';
+  if (route && route.time != null){
+    const h = route.time / 3600;
+    $('#stTime').textContent = `${Math.floor(h)}:${String(Math.round(h % 1 * 60)).padStart(2,'0')}`;
+  } else $('#stTime').textContent = '–';
+}
+
+function renderWpList(){
+  const ol = $('#wplist'); ol.innerHTML = '';
+  if (!wps.length){ ol.innerHTML = '<div class="empty">尚无途经点，在地图上单击添加</div>'; return; }
+  wps.forEach((w, i) => {
+    const li = document.createElement('li');
+    li.innerHTML = `<span class="n">${i+1}</span><span class="c">${w.lat.toFixed(5)}, ${w.lng.toFixed(5)}</span>`;
+    const del = document.createElement('button');
+    del.className = 'del'; del.textContent = '×'; del.title = '删除此点';
+    del.onclick = () => { wps.splice(i, 1); refreshMarkers(); save(); scheduleRoute(); };
+    li.appendChild(del); ol.appendChild(li);
+  });
+}
+
+function renderClimbList(){
+  const box = $('#climbList'); box.innerHTML = '';
+  if (!route){ box.innerHTML = '<div class="empty">暂无数据</div>'; return; }
+  if (!route.hasEle){ box.innerHTML = '<div class="empty">高程数据不可用，无法分析爬坡</div>'; return; }
+  if (!route.climbs.length){ box.innerHTML = '<div class="empty">本路线没有明显的爬坡段</div>'; return; }
+  route.climbs.forEach(c => {
+    const col = CATC[c.cap];
+    const div = document.createElement('div');
+    div.className = 'climb-item'; div.style.borderLeftColor = col;
+    div.innerHTML = `<div>
+      <div class="t" style="color:${col}">${CATN[c.cap]} · 爬升 ${Math.round(c.gain)} m</div>
+      <div class="m">K ${c.startKm.toFixed(1)} – ${c.endKm.toFixed(1)} · ${(c.len/1000).toFixed(2)} km ·
+        均陡 ${c.avg.toFixed(1)}% · 最大 ${c.max.toFixed(1)}%</div></div>`;
+    div.onclick = () => {
+      const seg = route.pts.slice(c.a, c.b + 1).map(p => { const q = toDisp(p.lat, p.lng); return [q[0], q[1]]; });
+      map.flyToBounds(L.latLngBounds(seg), {padding:[90, 90], maxZoom:15});
+    };
+    box.appendChild(div);
+  });
+}
+
+/* ================= 高程剖面图 ================= */
+let chartGeom = null;
+function niceStep(range, target){
+  const raw = range / target;
+  const p = Math.pow(10, Math.floor(Math.log10(raw || 1)));
+  const c = raw / p;
+  return (c < 1.5 ? 1 : c < 3.5 ? 2 : c < 7.5 ? 5 : 10) * p;
+}
+function renderChart(){
+  const cv = $('#chart'), wrap = $('#chartWrap');
+  const wCss = wrap.clientWidth || 370, hCss = 190;
+  const dpr = window.devicePixelRatio || 1;
+  cv.width = wCss * dpr; cv.height = hCss * dpr;
+  cv.style.width = wCss + 'px'; cv.style.height = hCss + 'px';
+  const ctx = cv.getContext('2d');
+  ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+  ctx.clearRect(0, 0, wCss, hCss);
+  chartGeom = null;
+  if (!route){
+    ctx.fillStyle = '#9aa0aa'; ctx.font = '12px sans-serif'; ctx.textAlign = 'center';
+    ctx.fillText('添加两个以上途经点后显示高程剖面', wCss/2, hCss/2);
+    return;
+  }
+  if (!route.hasEle){
+    ctx.fillStyle = '#9aa0aa'; ctx.font = '12px sans-serif'; ctx.textAlign = 'center';
+    ctx.fillText('高程数据不可用', wCss/2, hCss/2);
+    return;
+  }
+  const pts = route.pts;
+  const mL = 36, mR = 8, mT = 16, mB = 20;
+  const W = wCss - mL - mR, H = hCss - mT - mB;
+  let eMin = Infinity, eMax = -Infinity;
+  for (const p of pts){ if (p.sele < eMin) eMin = p.sele; if (p.sele > eMax) eMax = p.sele; }
+  const ePad = Math.max((eMax - eMin) * 0.1, 5);
+  eMin = Math.max(0, Math.floor(eMin - ePad)); eMax = Math.ceil(eMax + ePad);
+  const totalKm = route.lenKm;
+  const X = km => mL + km / totalKm * W;
+  const Y = e => mT + (1 - (e - eMin) / (eMax - eMin)) * H;
+  chartGeom = {mL, mR, W, totalKm};
+  // 网格与坐标
+  ctx.strokeStyle = '#ececf0'; ctx.fillStyle = '#9aa0aa'; ctx.font = '10px sans-serif';
+  const ys = niceStep(eMax - eMin, 4);
+  ctx.textAlign = 'right';
+  for (let e = Math.ceil(eMin/ys)*ys; e <= eMax; e += ys){
+    ctx.beginPath(); ctx.moveTo(mL, Y(e)); ctx.lineTo(wCss - mR, Y(e)); ctx.stroke();
+    ctx.fillText(Math.round(e) + ' m', mL - 4, Y(e) + 3);
+  }
+  const xs = niceStep(totalKm, 6);
+  ctx.textAlign = 'center';
+  for (let k = 0; k <= totalKm + 1e-9; k += xs){
+    ctx.beginPath(); ctx.moveTo(X(k), mT); ctx.lineTo(X(k), hCss - mB); ctx.stroke();
+    ctx.fillText(k % 1 < 0.01 ? Math.round(k) : k.toFixed(1), X(k), hCss - 6);
+  }
+  // 高程填充
+  ctx.beginPath();
+  ctx.moveTo(X(0), Y(pts[0].sele));
+  for (const p of pts) ctx.lineTo(X(p.dist/1000), Y(p.sele));
+  ctx.lineTo(X(totalKm), hCss - mB); ctx.lineTo(X(0), hCss - mB); ctx.closePath();
+  ctx.fillStyle = 'rgba(60,64,72,.10)'; ctx.fill();
+  // 按坡度着色的轮廓线
+  ctx.lineWidth = 2; ctx.lineJoin = 'round';
+  let prev = null;
+  for (let i = 0; i < pts.length - 1; i++){
+    const c = bucket(pts[i].grade).c;
+    if (c !== prev){ ctx.strokeStyle = c; ctx.beginPath(); ctx.moveTo(X(pts[i].dist/1000), Y(pts[i].sele)); prev = c; }
+    ctx.lineTo(X(pts[i+1].dist/1000), Y(pts[i+1].sele));
+    if (i + 2 >= pts.length || bucket(pts[i+1].grade).c !== c) ctx.stroke();
+  }
+  // 爬坡段色带
+  ctx.textAlign = 'center'; ctx.font = 'bold 10px sans-serif';
+  for (const c of route.climbs){
+    const x0 = X(c.startKm), x1 = X(c.endKm);
+    if (x1 - x0 < 2) continue;
+    ctx.fillStyle = CATC[c.cap] + '30';
+    ctx.fillRect(x0, mT, x1 - x0, H);
+    if (x1 - x0 >= 16){
+      ctx.fillStyle = CATC[c.cap];
+      ctx.fillText(c.cap || '·', (x0 + x1) / 2, mT - 4);
+    }
+  }
+}
+
+/* 剖面图悬停 → 地图联动 */
+const tip = $('#chartTip');
+$('#chartWrap').addEventListener('mousemove', ev => {
+  if (!route || !chartGeom || !route.hasEle){ tip.style.display = 'none'; return; }
+  const rect = ev.currentTarget.getBoundingClientRect();
+  const mx = ev.clientX - rect.left;
+  const {mL, W, totalKm} = chartGeom;
+  if (mx < mL || mx > mL + W){ tip.style.display = 'none'; hoverMarker.setStyle({opacity:0, fillOpacity:0}); return; }
+  const km = (mx - mL) / W * totalKm, d = km * 1000;
+  const pts = route.pts;
+  let lo = 0, hi = pts.length - 1;
+  while (lo < hi){ const m = (lo + hi) >> 1; if (pts[m].dist < d) lo = m + 1; else hi = m; }
+  const p = pts[lo];
+  const climb = route.climbs.find(c => lo >= c.a && lo <= c.b);
+  tip.innerHTML = `<b>${km.toFixed(2)} km</b> · ${Math.round(p.ele)} m · ${p.grade.toFixed(1)}%` +
+                  (climb ? `<br>${CATN[climb.cap]} · 均陡 ${climb.avg.toFixed(1)}%` : '');
+  tip.style.display = 'block';
+  tip.style.left = Math.min(mx + 14, rect.width - 150) + 'px';
+  tip.style.top = '6px';
+  const q = toDisp(p.lat, p.lng);
+  hoverMarker.setLatLng(q);
+  hoverMarker.setStyle({opacity:1, fillOpacity:1});
+});
+$('#chartWrap').addEventListener('mouseleave', () => {
+  tip.style.display = 'none';
+  hoverMarker.setStyle({opacity:0, fillOpacity:0});
+});
+
+/* ================= 地址搜索 ================= */
+const searchInput = $('#searchInput'), searchResults = $('#searchResults');
+let searchTimer = null, searchItems = [];
+function esc(s){ return String(s || '').replace(/[&<>"]/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c])); }
+
+searchInput.addEventListener('input', () => {
+  clearTimeout(searchTimer);
+  const q = searchInput.value.trim();
+  if (q.length < 2){ searchResults.style.display = 'none'; return; }
+  searchTimer = setTimeout(() => doSearch(q), 500);
+});
+searchInput.addEventListener('keydown', e => {
+  if (e.key === 'Enter'){
+    clearTimeout(searchTimer);
+    const q = searchInput.value.trim();
+    if (q.length >= 2) doSearch(q);
+  }
+});
+document.addEventListener('click', e => {
+  if (!e.target.closest || !e.target.closest('#searchBox')) searchResults.style.display = 'none';
+});
+
+/* 搜索源:有高德 Key 优先高德(国内地址准),否则 Photon(OSM,免Key);Nominatim 兜底 */
+async function doSearch(q){
+  searchResults.innerHTML = '<div class="sr info">🔍 搜索中…（国际源可能需要十余秒）</div>';
+  searchResults.style.display = 'block';
+  const key = keyInput.value.trim();
+  const order = key ? ['amap', 'photon', 'nominatim'] : ['photon', 'nominatim'];
+  let items = null, via = '';
+  for (const src of order){
+    try{
+      if (src === 'amap'){
+        const res = await fetchT(`https://restapi.amap.com/v3/place/text?key=${encodeURIComponent(key)}&keywords=${encodeURIComponent(q)}&offset=8&page=1`, 10000);
+        const j = await res.json();
+        if (j.status === '1' && Array.isArray(j.pois) && j.pois.length){
+          items = j.pois.map(p => {
+            const ll = (p.location || '').split(',').map(Number);
+            const w = gcj2wgs(ll[1], ll[0]);
+            return {name: p.name, disp: [p.pname, p.cityname, p.adname, p.address].filter(Boolean).join(' · '),
+                    lat: w[0], lng: w[1]};
+          });
+          via = '高德';
+        }
+      } else if (src === 'photon'){
+        const res = await fetchT('/proxy/photon/api/?limit=8&q=' + encodeURIComponent(q), 22000);
+        const j = await res.json();
+        if (j && Array.isArray(j.features) && j.features.length){
+          items = j.features.map(f => {
+            const p = f.properties || {}, c = f.geometry.coordinates;
+            return {name: p.name || p.street || p.district || p.city || '未命名地点',
+                    disp: [p.district, p.city, p.state, p.country].filter(Boolean).join(' · '),
+                    lat: c[1], lng: c[0]};
+          });
+          via = 'Photon（OSM）';
+        }
+      } else {
+        const res = await fetchT(`https://nominatim.openstreetmap.org/search?format=jsonv2&limit=8&accept-language=zh&q=${encodeURIComponent(q)}`, 12000);
+        const j = await res.json();
+        if (Array.isArray(j) && j.length){
+          items = j.map(r => ({name: r.name || String(r.display_name || '').split(',')[0],
+                               disp: r.display_name || '', lat: +r.lat, lng: +r.lon}));
+          via = 'Nominatim（OSM）';
+        }
+      }
+      if (items) break;
+    }catch(err){ /* 尝试下一个搜索源 */ }
+  }
+  if (!items){
+    searchResults.innerHTML = `<div class="sr info">未找到「${esc(q)}」${key ? '' : '；国内地址建议先填写高德 Key 以获得更好结果'}</div>`;
+    return;
+  }
+  searchItems = items;
+  searchResults.innerHTML = items.map((it, i) =>
+    `<div class="sr" data-i="${i}"><b>${esc(it.name)}</b><span class="d">${esc(it.disp)} · ${via}</span></div>`).join('');
+  [...searchResults.querySelectorAll('.sr[data-i]')].forEach(el => {
+    el.onclick = () => applyResult(+el.dataset.i);
+  });
+}
+
+/* 选择结果 → 添加为途经点并飞至 */
+function applyResult(i){
+  const it = searchItems[i];
+  if (!it) return;
+  wps.push({lat: it.lat, lng: it.lng});
+  refreshMarkers(); save(); scheduleRoute();
+  map.flyTo([it.lat, it.lng], Math.max(map.getZoom(), 13));
+  searchResults.style.display = 'none';
+  searchInput.value = '';
+}
+
+/* ================= 途经点 ================= */
+function refreshMarkers(){
+  wpLayer.clearLayers();
+  wps.forEach((w, i) => {
+    const q = toDisp(w.lat, w.lng);
+    L.marker(q, {
+      draggable: true,
+      icon: L.divIcon({className:'', html:`<div class="wp-icon">${i+1}</div>`, iconSize:[24,24], iconAnchor:[12,12]}),
+      zIndexOffset: 1000
+    }).addTo(wpLayer).on('dragend', e => {
+      const ll = e.target.getLatLng();
+      const w2 = baseDatum === 'gcj' ? gcj2wgs(ll.lat, ll.lng) : [ll.lat, ll.lng];
+      wps[i] = {lat: w2[0], lng: w2[1]};
+      save(); scheduleRoute();
+    });
+  });
+  renderWpList();
+}
+
+/* 单击加点 / 双击缩放防冲突 */
+let pendingClick = null;
+map.on('click', e => {
+  if (pendingClick) return;
+  const raw = {lat: e.latlng.lat, lng: e.latlng.lng};
+  pendingClick = setTimeout(() => {
+    pendingClick = null;
+    const w = baseDatum === 'gcj' ? gcj2wgs(raw.lat, raw.lng) : [raw.lat, raw.lng];
+    wps.push({lat: w[0], lng: w[1]});
+    refreshMarkers(); save(); scheduleRoute();
+  }, 260);
+});
+map.on('dblclick', () => {
+  if (pendingClick){ clearTimeout(pendingClick); pendingClick = null; }
+});
+
+/* 底图切换 → 坐标系联动重绘 */
+map.on('baselayerchange', e => {
+  currentBaseName = String(e.name);
+  baseDatum = LAYER_DATUM[currentBaseName] || 'wgs';
+  refreshMarkers(); draw();
+});
+
+/* ================= 网络探测与底图默认值 ================= */
+function probeTile(url, ms = 4500){
+  return new Promise(res => {
+    const img = new Image();
+    const t = setTimeout(() => { img.src = ''; res(false); }, ms);
+    img.onload = () => { clearTimeout(t); res(true); };
+    img.onerror = () => { clearTimeout(t); res(false); };
+    img.src = url;
+  });
+}
+/* 多 URL 并行探测,任一成功即可(应对不稳定网络) */
+function probeAny(urls, ms = 5000){
+  return new Promise(res => {
+    let pending = urls.length, done = false;
+    if (!pending) return res(false);
+    urls.forEach(u => probeTile(u, ms).then(ok => {
+      if (ok && !done){ done = true; res(true); }
+      if (--pending === 0 && !done) res(false);
+    }));
+  });
+}
+async function switchBase(name){
+  if (!bases[name]) return;
+  Object.values(bases).forEach(b => map.removeLayer(b));
+  bases[name].addTo(map);
+  currentBaseName = name;
+  baseDatum = LAYER_DATUM[name] || 'wgs';
+  rebuildLayerControl();
+  refreshMarkers(); draw();
+}
+(async () => {
+  const osmOK = await probeAny([
+    'https://tile.openstreetmap.org/10/841/387.png',
+    'https://tile.openstreetmap.org/10/842/388.png'
+  ]);
+  if (osmOK){
+    netBaseText = '✔ OpenStreetMap 官方瓦片可用';
+    setNetInfo(netBaseText);
+  } else {
+    const amapQ = 'lang=zh_cn&size=1&scale=1&style=7&x=107&y=53&z=7';
+    const amapOK = await probeAny([
+      'https://webrd01.is.autonavi.com/appmaptile?' + amapQ,
+      'https://webrd02.is.autonavi.com/appmaptile?' + amapQ,
+      'https://webrd03.is.autonavi.com/appmaptile?' + amapQ
+    ]);
+    if (amapOK){
+      await switchBase('高德地图');
+      netBaseText = '当前网络无法直连 OSM 官方服务，已自动切换高德底图（右上角图层可切回 OSM）';
+      setNetInfo(netBaseText);
+    } else {
+      // 两个探测都失败:大概率是探测单瓦片误判,尽力切到高德(国内源通常可达)
+      await switchBase('高德地图');
+      netBaseText = '⚠ 网络探测不稳定，已默认高德底图；若瓦片未显示请在右上角图层中切换';
+      setNetInfo(netBaseText);
+    }
+  }
+  // BRouter 探测
+  try{
+    const res = await fetchT('/proxy/brouter?lonlats=116.17,39.98|116.175,39.985&profile=trekking&alternativeidx=0&format=geojson', 8000);
+    const gj = await res.json();
+    netProbe.brouter = !!(gj.features && gj.features[0]);
+  }catch(e){ netProbe.brouter = false; }
+  updateNetInfo();
+  if (engineSel.value === 'auto' && wps.length >= 2) scheduleRoute();
+})();
+let netBaseText = '';
+function updateNetInfo(){
+  const eng = netProbe.brouter == null ? '检测中…' : netProbe.brouter ? 'BRouter（OSM 路网+高程）' :
+    (keyInput.value.trim() ? '高德骑行' : '直线手绘（可填高德 Key 启用真实路网）');
+  setNetInfo(netBaseText + (netBaseText ? '｜' : '') + '路线引擎：' + eng);
+}
+
+/* ================= 工具栏 ================= */
+$('#btnUndo').onclick = () => { wps.pop(); refreshMarkers(); save(); scheduleRoute(); };
+$('#btnClear').onclick = () => {
+  if (!wps.length) return;
+  wps = []; route = null;
+  refreshMarkers(); save(); draw();
+};
+$('#profile').onchange = () => { save(); scheduleRoute(); };
+engineSel.onchange = () => { save(); scheduleRoute(); };
+keyInput.onchange = () => { save(); updateNetInfo(); scheduleRoute(); };
+tdtKeyInput.onchange = () => {
+  save();
+  const wasTdt = currentBaseName.indexOf('天地图') === 0;
+  buildLayerSets();
+  rebuildLayerControl();
+  if (wasTdt) switchBase('天地图 矢量');
+};
+$('#btnGpx').onclick = () => {
+  if (!route){ toast('请先规划一条路线'); return; }
+  let s = '<?xml version="1.0" encoding="UTF-8"?>\n' +
+    '<gpx version="1.1" creator="cycle-route-designer" xmlns="http://www.topografix.com/GPX/1/1">\n' +
+    '<trk><name>骑行路线</name><type>cycling</type><trkseg>\n';
+  for (const p of route.pts){
+    const ele = p.ele != null ? `<ele>${p.ele.toFixed(1)}</ele>` : '';
+    s += `<trkpt lat="${p.lat.toFixed(6)}" lon="${p.lng.toFixed(6)}">${ele}</trkpt>\n`;
+  }
+  s += '</trkseg></trk></gpx>';
+  const a = document.createElement('a');
+  a.href = URL.createObjectURL(new Blob([s], {type:'application/gpx+xml'}));
+  a.download = 'cycling-route.gpx';
+  a.click();
+  URL.revokeObjectURL(a.href);
+};
+$('#sbToggle').onclick = () => $('#sidebar').classList.toggle('open');
+
+/* ================= 图例 ================= */
+(function legends(){
+  const lg = $('#legendGrade');
+  lg.innerHTML = gradeBuckets.map(b => `<span><i style="background:${b.c}"></i>${b.n}</span>`).join('');
+  const lc = $('#legendCat');
+  lc.innerHTML = ['HC','1','2','3','4'].map(k =>
+    `<span><i style="background:${CATC[k]}"></i>${CATN[k]}</span>`).join('') +
+    `<span><i style="background:#9e9e9e"></i>未分级</span>`;
+})();
+
+/* ================= 存取 ================= */
+const PROFILES_OK = {trekking:1, racingbike:1, fastbike:1, shortest:1};
+function save(){
+  try{
+    localStorage.setItem(KEY, JSON.stringify({
+      wps, profile: profileSel.value, engine: engineSel.value,
+      amapKey: keyInput.value.trim(), tdtKey: tdtKeyInput.value.trim(),
+      center: map.getCenter(), zoom: map.getZoom()
+    }));
+  }catch(e){}
+}
+(function restore(){
+  let st = null;
+  try{ st = JSON.parse(localStorage.getItem(KEY)); }catch(e){}
+  if (st){
+    if (PROFILES_OK[st.profile]) profileSel.value = st.profile;
+    if (['auto','brouter','amap','straight'].includes(st.engine)) engineSel.value = st.engine;
+    if (st.amapKey) keyInput.value = st.amapKey;
+    if (st.tdtKey){
+      tdtKeyInput.value = st.tdtKey;
+      buildLayerSets(); rebuildLayerControl();
+    }
+  }
+  if (st && st.center) map.setView([st.center.lat, st.center.lng], st.zoom || 13);
+  else map.setView([39.9832, 116.1739], 13);   // 默认：北京西山（有爬坡可演示）
+  if (st && Array.isArray(st.wps)){ wps = st.wps; refreshMarkers(); computeRoute(); }
+})();
+
+map.on('moveend zoomend', save);
+window.__viewLog = [];
+map.on('zoomend moveend', function(e){
+  const c = map.getCenter();
+  window.__viewLog.push({ z: +map.getZoom().toFixed(1), lat: +c.lat.toFixed(4), lng: +c.lng.toFixed(4),
+    ev: e.type, stack: (new Error().stack || '').split('\n').slice(2, 5).join(' << ').slice(0, 220) });
+  if (window.__viewLog.length > 15) window.__viewLog.shift();
+});
+window.addEventListener('resize', renderChart);
+
+/* 调试/自动化测试句柄 */
+window.__dbg = {
+  get wps(){ return wps.length; },
+  get route(){ return route && {
+    engine: route.engine, hasEle: route.hasEle,
+    lenKm: +route.lenKm.toFixed(2), asc: route.asc != null ? Math.round(route.asc) : null,
+    desc: route.desc != null ? Math.round(route.desc) : null,
+    time: route.time != null ? Math.round(route.time) : null,
+    climbs: route.climbs.map(c => ({
+      cap: c.cap, km: +c.startKm.toFixed(2), len: +(c.len/1000).toFixed(2),
+      gain: Math.round(c.gain), avg: +c.avg.toFixed(1), max: +c.max.toFixed(1) }))
+  }; },
+  get profile(){ return profileSel.value; },
+  get engine(){ return engineSel.value; },
+  get base(){ return baseDatum; },
+  get status(){ return document.querySelector('#status').textContent; },
+  get netinfo(){ return document.querySelector('#netinfo').textContent; },
+  get tiles(){ return document.querySelectorAll('img.leaflet-tile-loaded').length; },
+  addAt(lat, lng){ wps.push({lat, lng}); refreshMarkers(); save(); scheduleRoute(); },
+  get mapCenter(){ const c = map.getCenter(); return [c.lat, c.lng, map.getZoom()]; },
+  clearAll(){ wps = []; route = null; refreshMarkers(); save(); draw(); },
+  switchBase(name){ return switchBase(name); },
+  get layers(){ return { base: currentBaseName, datum: baseDatum, bases: Object.keys(bases) }; },
+  setOverlay(name, on){ if (on) overlays[name].addTo(map); else map.removeLayer(overlays[name]); },
+  search: q => doSearch(q).then(() => searchItems.map(x => ({name: x.name, lat: +x.lat.toFixed(4), lng: +x.lng.toFixed(4)}))),
+  pickResult: i => applyResult(i),
+  probePts(){
+    if (!route) return null;
+    return route.pts.filter((p, i) => i % 8 === 0).slice(0, 14).map(p => ({
+      d: +p.dist.toFixed(0),
+      e: p.ele != null ? +p.ele.toFixed(1) : null,
+      s: p.sele != null ? +p.sele.toFixed(1) : null,
+      g: p.grade != null ? +p.grade.toFixed(2) : null
+    }));
+  },
+  probe(){
+    if (!route || !route.hasEle) return {hasRoute: !!route, hasEle: route && route.hasEle};
+    const pts = route.pts;
+    let up = 0, gMax = -99, gMin = 99, eMin = 9999, eMax = -9999;
+    for (const p of pts){
+      if (p.grade >= 1.5) up++;
+      gMax = Math.max(gMax, p.grade); gMin = Math.min(gMin, p.grade);
+      eMin = Math.min(eMin, p.ele); eMax = Math.max(eMax, p.ele);
+    }
+    return { n: pts.length, upPts: up, upPct: +(up/pts.length*100).toFixed(1),
+             gMax: +gMax.toFixed(1), gMin: +gMin.toFixed(1),
+             eMin: Math.round(eMin), eMax: Math.round(eMax),
+             climbs: route.climbs.length };
+  }
+};
+</script>
+</body>
+</html>
